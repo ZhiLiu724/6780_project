@@ -14,7 +14,7 @@ library(dplyr)
 load data
 
 ```{r}
-path = "/Users/zliu/Desktop/2022 Spring/6780/Project/data.csv"
+path = "/Users/felicityj/Documents/GitHub/6780_project/data.csv"
 data = data.frame(read.csv(path))
 data_with_ct <- data[!is.na(data['census_tract']),]
 dim(data); dim(data_with_ct)
