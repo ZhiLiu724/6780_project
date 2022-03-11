@@ -1,0 +1,12 @@
+model{
+  for(i in 1:N){
+  y[i,1:2] ~ dmnorm(mu[],tau[,])
+  }
+  mu[1:2] ~ dmnorm(xi[],kappa[,])  ##  S2 is the precision matrix
+  
+
+  ## change here
+  tau[1:2,1:2] ~  dwish(S3[,],3)  ##  S3 is the inverse scale matrix
+  cov[1:2,1:2] <- inverse(tau[,])
+  corr <- cov[1,2] / sqrt(cov[1,1]*cov[2,2])
+  }

@@ -7,6 +7,9 @@ output: html_document
 library(rstan)
 library(brms)
 library(dplyr)
+library(rjags)
+library(MASS)  # need for mvrnorm
+library(MCMCpack) # need for rwish
 ```
 
 ## R Markdown
@@ -14,7 +17,7 @@ library(dplyr)
 load data
 
 ```{r}
-path = "/Users/felicityj/Documents/GitHub/6780_project/data.csv"
+path = "/Users/felicityj/Documents/GitHub/6780_project/data_with_coordinates.csv"
 data = data.frame(read.csv(path))
 data_with_ct <- data[!is.na(data['census_tract']),]
 dim(data); dim(data_with_ct)
@@ -22,10 +25,142 @@ dim(data); dim(data_with_ct)
 
 ## Including Plots
 
-You can also embed plots, for example:
+test example
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+schools_data <- list(
+  J = 8,
+  y = c(28,  8, -3,  7, -1,  1, 18, 12),
+  sigma = c(15, 10, 16, 11,  9, 11, 10, 18)
+)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+fit1 <- stan(
+  file = "spatial.stan",  # Stan program
+  data = schools_data,    # named list of data
+  chains = 4,             # number of Markov chains
+  warmup = 1000,          # number of warmup iterations per chain
+  iter = 2000,            # total number of iterations per chain
+  cores = 1,              # number of cores (could use one per chain)
+  refresh = 0)             # no progress shown
+  
+```
+```{r}
+print(fit1, pars=c("theta", "mu", "tau", "lp__"), probs=c(.1,.5,.9))
+```
+
+
+## bivariate normal on simulated data
+
+```{r}
+set.seed(6780)
+N = 15000
+S = matrix(c(1,.2,.2,5),nrow=2)
+y = mvrnorm(N,c(1,3),S)
+```
+
+```{r}
+mu0 = as.vector(c(0,0))
+S2 = matrix(c(1,0,0,1),nrow=2)/1000
+S3 =  matrix(c(1,0,0,1),nrow=2)/10000
+data = list(y=y,N=N,S2=S2,S3=S3,mu0=mu0)
+inits=function(){list( mu=mvrnorm(1,mu0,matrix(c(10,0,0,10),nrow=2) ),
+                       tau = rwish(3,matrix(c(.02,0,0,.04),nrow=2)) )}
+```
+
+
+```{r}
+t1 = proc.time()
+multNorm.mcmc <- jags.model("mvn.bug",data=data, inits = inits,n.chains = 3, n.adapt=1000, quiet=FALSE)
+nthin = 5
+multNorm.coda = coda.samples(multNorm.mcmc,c("mu","cov[1,1]","cov[1,2]","cov[2,2]","corr"),500*nthin, thin = nthin)
+t2 = proc.time()
+```
+
+
+```{r}
+t2-t1
+summary(multNorm.coda,digits=2)
+```
+
+```{r}
+gelman.diag(multNorm.coda)
+effectiveSize(multNorm.coda)
+
+par(mfrow = c(3, 4))
+plot(multNorm.coda, auto.layout = FALSE)
+
+par(mfrow=c(2,3))
+gelman.plot(multNorm.coda,auto.layout = FALSE)
+```
+
+## bivariate normal on real data
+
+```{r}
+coord = subset(data_with_ct, select=c("Latitude", "Longitude"))
+coord = data.matrix(coord)
+N = dim(coord)[1]
+```
+
+```{r}
+xi = as.vector(apply(coord, 2, median))
+rng_coord = apply(coord, 2, range)
+R1 = rng_coord[2,1]-rng_coord[1,1]
+R2 = rng_coord[2,2]-rng_coord[1,2]
+kappa = matrix(c(R1^2,0,0,R2^2),nrow=2)/1000
+# change here
+S3 =  matrix(c(1,0,0,1),nrow=2)/10000
+data = list(y=coord,N=N,S2=S2,S3=S3,mu0=mu0)
+inits=function(){list( mu=mvrnorm(1,mu0,matrix(c(10,0,0,10),nrow=2) ),
+                       tau = rwish(3,matrix(c(.02,0,0,.04),nrow=2)) )}
+```
+
+
+```{r}
+t1 = proc.time()
+multNorm.mcmc <- jags.model("spatial.bug",data=data, inits = inits,n.chains = 3, n.adapt=1000, quiet=FALSE)
+nthin = 5
+multNorm.coda = coda.samples(multNorm.mcmc,c("mu","cov[1,1]","cov[1,2]","cov[2,2]","corr"),500*nthin, thin = nthin)
+t2 = proc.time()
+```
+
+
+```{r}
+t2-t1
+summary(multNorm.coda,digits=2)
+```
+
+```{r}
+gelman.diag(multNorm.coda)
+effectiveSize(multNorm.coda)
+
+par(mfrow = c(3, 4))
+plot(multNorm.coda, auto.layout = FALSE)
+
+par(mfrow=c(2,3))
+gelman.plot(multNorm.coda,auto.layout = FALSE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
