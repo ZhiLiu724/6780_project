@@ -11,35 +11,97 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rstan)
 library(brms)
 library(dplyr)
+library(lubridate)
+library(fastDummies)
+library(recipes)
+```
+
+```{r}
+options(mc.cores=parallel::detectCores())
 ```
 
 load the dataset, filter out NAs
 
 ```{r}
-path = "/Users/zliu/Desktop/2022 Spring/6780/Project/data.csv"
+path = "E:/Desktop/2022 Spring/6780/Project/6780_project/data.csv"
 data = data.frame(read.csv(path))
-data_with_ct <- data[!is.na(data['census_tract']),]
-dim(data); dim(data_with_ct)
+dim(data)
+```
+```{r}
+aggregate_stan_data <- function(raw_data, max_dim, use_hierarchy = TRUE) {
+  data_with_ct <- raw_data[!is.na(raw_data["census_tract"]),]
+  data_with_ct <- data_with_ct[!data_with_ct$Borough=='',]
+  data_with_ct <- data_with_ct[1:max_dim,] ##select a subset
+  
+  regdata <- select(data_with_ct, NumberDuplicates, Borough, census_tract, Category, SRCreatedDate, Duration)
+  regdata$SRCreatedDate <- month(regdata$SRCreatedDate)
+  regdata$Duration <- log(regdata$Duration)
+  regdata <- regdata %>% rename(
+    Y = NumberDuplicates,
+    Census = census_tract,
+    Month = SRCreatedDate,
+    Log_Offset = Duration
+  )
+  regdata$Census <- as.factor(regdata$Census)
+  regdata$Month <- as.factor(regdata$Month)
+  
+  if (use_hierarchy) {hierarchy = 1} else {hierarchy = 0} ## this specifies whether use hierarchy on census tract
+
+  
+  X_Borough <- regdata[,c('Y','Borough')]
+  X_Borough <- dummy_columns(X_Borough, select_columns = 'Borough', remove_selected_columns = TRUE)
+  X_Borough <- subset(X_Borough, select = -Y)
+  
+  X_Census <- regdata[,c('Y','Census')]
+  X_Census <- dummy_columns(X_Census, select_columns = 'Census', remove_selected_columns = TRUE)
+  X_Census <- subset(X_Census, select = -Y)
+  
+  X_Category <- regdata[,c('Y','Category')]
+  X_Category <- dummy_columns(X_Category, select_columns = 'Category', remove_selected_columns = TRUE)
+  X_Category <- subset(X_Category, select = -Y)
+  
+  X_Month <- regdata[,c('Y','Month')]
+  X_Month <- dummy_columns(X_Month, select_columns = 'Month', remove_selected_columns = TRUE)
+  X_Month <- subset(X_Month, select = -Y)
+  
+  stan_data = list("N_obs" = dim(regdata)[1],
+              "N_Borough" = length(unique(regdata$Borough)),
+              "N_Census" = length(unique(regdata$Census)),
+              "N_Category" = length(unique(regdata$Category)),
+              "N_Month" = 12,
+              "X_Borough" = X_Borough,
+              "X_Census" = X_Census,
+              "X_Category" = X_Category,
+              "X_Month" = X_Month,
+              "Y" = regdata$Y,
+              "offset" = regdata$Log_Offset,
+              "use_hierarchy" = hierarchy
+  )
+  
+  return(stan_data)
+}
+```
+
+
+Generate data for Stan
+```{r}
+stan_data = aggregate_stan_data(data, 20000)
+```
+
+Check length of data
+```{r}
+stan_data$N_obs
+```
+
+Load the model
+```{r}
+fileName <- "E:/Desktop/2022 Spring/6780/Project/6780_project/poisson_Reg.stan"
+stan_code <- readChar(fileName, file.info(fileName)$size)
+cat(stan_code)
 ```
 
 ```{r}
-colnames(data)
+stan_res <- stan(model_code = stan_code, data = stan_data,
+                 chains = 4, iter = 1000, warmup = 200, thin = 10)
+
 ```
-
-```{r}
-length(unique(data_with_ct$IncidentGlobalID))
-```
-
-```{r}
-gb_ct <- data_with_ct %>% group_by(census_tract) 
-gb_ct_sum <-  gb_ct %>% summarize(n_inc = length(unique(IncidentGlobalID)))
-gb_borough <- data_with_ct %>% group_by(Borough)
-gb_borough_sum <- gb_borough %>% summarize(n_inc = length(unique(IncidentGlobalID)))
-```
-
-
-```{r}
-hist(gb_ct_sum$n_inc)
-```
-
-
