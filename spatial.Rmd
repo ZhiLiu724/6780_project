@@ -166,7 +166,8 @@ ggplot(coord_df, aes(x=Latitude, y=Longitude)) + geom_point(size = 1, alpha=0.6,
   geom_point(aes(x=40.594563, y=-74.014595), size = 2, alpha=1.0, colour = 'red')+
   geom_point(aes(x=40.709422, y=-73.882909), size = 2, alpha=1.0, colour = 'black')+
   geom_ellipse(aes(x0=40.594563, y0=-74.014595, a=a,b=b, angle = angle_x, color="black"))+
-  geom_ellipse(aes(x0=40.709422, y0=-73.882909, a=a,b=b, angle = angle_x, color="red"))
+  geom_ellipse(aes(x0=40.709422, y0=-73.882909, a=a,b=b, angle = angle_x, color="red"))+
+  theme(legend.position="none")
 
 ```
 
