@@ -12,6 +12,9 @@ library(dplyr)
 library(rjags)
 library(MASS)  # need for mvrnorm
 library(MCMCpack) # need for rwish
+library(ggmap)
+library(tidyr)
+library(ggforce)
 ```
 
 ## R Markdown
@@ -103,9 +106,10 @@ gelman.plot(multNorm.coda,auto.layout = FALSE)
 ## bivariate normal on real data
 
 ```{r}
-coord <- subset(data_with_ct, select=c("Latitude", "Longitude"))
+N <- 2000
+coord_df <- subset(data_with_ct, select=c("Latitude", "Longitude"))
+coord_df <- as.data.frame(coord[1:N,])
 coord <- data.matrix(coord)
-N <- dim(coord)[1]
 ```
 
 ```{r}
@@ -120,19 +124,19 @@ alpha <- 6
 K<-2
 onesRepNclust <- rep(1,K)
 data = list(y=coord,N=N,xi=xi,kappa=kappa,alpha=alpha, beta=beta,K=K, onesRepNclust=onesRepNclust)
-inits=function(){list( mu=mvrnorm(1,xi,matrix(c(10,0,0,10),nrow=2) ),
-                       tau = rwish(6,matrix(c(.02,0,0,.04),nrow=2)))}
+#inits=function(){list( mu=mvrnorm(N,xi,matrix(c(10,0,0,10),nrow=2) ),
+                       #tau = rwish(6,matrix(c(.02,0,0,.04),nrow=2)))}
 ```
 
 ```{r}
-kappa
+mu=mvrnorm(maxdim,xi,matrix(c(10,0,0,10),nrow=2))
 ```
 
 ```{r}
 t1 = proc.time()
-multNorm.mcmc <- jags.model("spatial.bug",data=data, inits = inits,n.chains = 3, n.adapt=1000, quiet=FALSE)
+multNorm.mcmc <- jags.model("spatial.bug",data=data,n.chains = 3, n.adapt=1000, quiet=FALSE)
 nthin = 5
-multNorm.coda = coda.samples(multNorm.mcmc,c("mu","cov[1,1]","cov[1,2]","cov[2,2]","corr"),500*nthin, thin = nthin)
+multNorm.coda = coda.samples(multNorm.mcmc,c("muOfGaussian","pk","cov[1,1]","cov[1,2]","cov[2,2]","corr"),500*nthin, thin = nthin)
 t2 = proc.time()
 ```
 
@@ -140,6 +144,30 @@ t2 = proc.time()
 ```{r}
 t2-t1
 summary(multNorm.coda,digits=2)
+```
+```{r}
+ucsd.map <- get_map("UC San Diego",zoom=15)
+ggmap(ucsd.map)
+```
+
+```{r}
+cov = matrix(c(0.004272, 0.002936, 0.002936, 0.008843), nrow = 2)
+eig_cov <- eigen(cov)
+a=sqrt(eig_cov$values[1])
+b=sqrt(eig_cov$values[2])
+angle_x = acos(eig_cov$vectors[1,1])
+a = (0.004272 + 0.008843)/2 + sqrt(((0.004272 - 0.008843)/2)^2 + 0.002936^2)
+
+a = sqrt(a)
+b = (0.004272 + 0.008843)/2 - sqrt(((0.004272 - 0.008843)/2)^2 + 0.002936^2)
+b = sqrt(b)
+theta = atan()
+ggplot(coord_df, aes(x=Latitude, y=Longitude)) + geom_point(size = 1, alpha=0.6, colour = '#56B4E9')+
+  geom_point(aes(x=40.594563, y=-74.014595), size = 2, alpha=1.0, colour = 'red')+
+  geom_point(aes(x=40.709422, y=-73.882909), size = 2, alpha=1.0, colour = 'black')+
+  geom_ellipse(aes(x0=40.594563, y0=-74.014595, a=a,b=b, angle = angle_x, color="black"))+
+  geom_ellipse(aes(x0=40.709422, y0=-73.882909, a=a,b=b, angle = angle_x, color="red"))
+
 ```
 
 ```{r}
