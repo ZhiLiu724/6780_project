@@ -117,14 +117,15 @@ kappa <- matrix(c(1/R1^2,0,0,1/R2^2),nrow=2)
 beta <- matrix(c(R1^2/10,0,0,R2^2/10),nrow=2)
 g <- 2
 alpha <- 6
-beta <- 0.5 * inv(h)
-data = list(y=coord,N=N,xi=xi,kappa=kappa,g=g, alpha=alpha, beta=beta)
+K<-2
+onesRepNclust <- rep(1,K)
+data = list(y=coord,N=N,xi=xi,kappa=kappa,alpha=alpha, beta=beta,K=K, onesRepNclust=onesRepNclust)
 inits=function(){list( mu=mvrnorm(1,xi,matrix(c(10,0,0,10),nrow=2) ),
                        tau = rwish(6,matrix(c(.02,0,0,.04),nrow=2)))}
 ```
 
 ```{r}
-beta
+kappa
 ```
 
 ```{r}
