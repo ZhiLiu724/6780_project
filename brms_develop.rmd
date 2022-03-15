@@ -1,0 +1,61 @@
+---
+title: "brms_poisson_reg.rmd"
+output: pdf_document
+date: '2022-03-13'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, echo = FALSE}
+library(rstan)
+library(brms)
+library(dplyr)
+library(lubridate)
+library(fastDummies)
+library(recipes)
+options(mc.cores=parallel::detectCores())
+```
+
+
+```{r}
+path = "E:/Desktop/2022 Spring/6780/Project/6780_project/data.csv"
+data = data.frame(read.csv(path))
+dim(data)
+```
+
+```{r}
+aggregate_brms_data <- function(raw_data, max_dim){
+  data_with_ct <- raw_data[!is.na(raw_data["census_tract"]),]
+  data_with_ct <- data_with_ct[!data_with_ct$Borough=='',]
+  data_with_ct <- data_with_ct[1:max_dim,] ##select a subset
+  
+  regdata <- select(data_with_ct, NumberDuplicates, Borough, census_tract, Category, SRCreatedDate, Duration)
+  regdata$SRCreatedDate <- month(regdata$SRCreatedDate)
+  regdata$Duration <- log(regdata$Duration)
+  regdata <- regdata %>% rename(
+    Y = NumberDuplicates,
+    Census = census_tract,
+    Month = SRCreatedDate,
+    Log_Offset = Duration
+  )
+  regdata$Census <- as.factor(regdata$Census)
+  regdata$Month <- as.factor(regdata$Month)
+  
+  return(regdata)
+}
+
+```
+
+```{r}
+regdata <- aggregate_brms_data(data, 2000)
+head(regdata)
+```
+
+
+```{r}
+fit1 <- brm(Y ~ (1|Borough) + Census + Category + Month + offset(Log_Offset),
+            family = 'poisson', data = regdata)
+
+```

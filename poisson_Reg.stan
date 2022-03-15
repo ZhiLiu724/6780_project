@@ -16,22 +16,23 @@ data {
   int<lower = 0> N_Category;
   int<lower = 0> N_Month;
   
-  matrix[N_obs, N_Borough] X_Borough;
+  ##matrix[N_obs, N_Borough] X_Borough;
+  matrix[N_Census, N_Borough] census_to_borough;
   matrix[N_obs, N_Census] X_Census;
   matrix[N_obs, N_Category] X_Category;
   matrix[N_obs, N_Month] X_Month;
   
   int<lower = 0> Y[N_obs];
   real offset[N_obs];
-  int<lower = 0, upper = 1> use_hierarchy;
+  ##int<lower = 0, upper = 1> use_hierarchy;
+  int<lower = 0, upper = 1> use_month;
 }
 
 // The parameters accepted by the model. Our model
 // accepts two parameters 'mu' and 'sigma'.
 parameters {
-  real intercept;
   vector[N_Borough] beta_Borough;
-  vector[N_Census] offset_Census;
+  vector[N_Census] beta_Census;
   vector[N_Category] beta_Category;
   vector[N_Month] beta_Month;
 
@@ -44,12 +45,12 @@ transformed parameters{
 
   for (i in 1:N_obs) {
     log_mu[i] = offset[i];
-    log_mu[i] += dot_product(X_Borough[i], beta_Borough);
-    if (use_hierarchy == 1){
-      log_mu[i] += dot_product(X_Census[i], offset_Census);
-      };
+    #log_mu[i] += dot_product(X_Borough[i], beta_Borough);
+    log_mu[i] += dot_product(X_Census[i], beta_Census);
     log_mu[i] += dot_product(X_Category[i], beta_Category);
-    log_mu[i] += dot_product(X_Month[i], beta_Month);
+    if (use_month == 1){
+      log_mu[i] += dot_product(X_Month[i], beta_Month);
+      };
   };
   
   // log_mu = offset + X_Borough*beta_Borough + X_Census*offset_Census + X_Category*beta_Category + X_Month*beta_Month;
@@ -59,7 +60,12 @@ transformed parameters{
 }
 
 model {
-  
+  beta_Borough ~ normal(0,5);
+  for (i in 1:N_Census){
+    beta_Census[i] ~ normal(dot_product(census_to_borough[i],beta_Borough), 2);
+  }
+  beta_Category ~ normal(0,5);
+  beta_Month ~ normal(0,5);
   Y ~ poisson(mu);
 }
 
