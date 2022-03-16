@@ -1,14 +1,14 @@
 model{
     for(i in 1:N){
-        y[i,1:2] ~ dmnorm(mu[,i],tau[,,i])
-        mu[1:2,i] <- muOfGaussian[,Gaussian[i]]
+        y[i,1:2] ~ dmnorm(mu[i,],tau[,,i])
+        mu[i,1:2] <- muOfGaussian[Gaussian[i],]
         tau[1:2,1:2,i] <- tauOfGaussian[,,Gaussian[i]]
         Gaussian[i] ~ dcat(pk[1:K])
     }
     for(k in 1:K){
-        muOfGaussian[1:2,k] ~ dmnorm(xi[],kappa[,])
+        muOfGaussian[k,1:2] ~ dmnorm(xi[],kappa[,])
         tauOfGaussian[1:2,1:2,k] ~  dwish(beta[,],alpha) 
-        cov[1:2,1:2,k] <- inverse(tau[,,k])
+        cov[1:2,1:2,k] <- inverse(tauOfGaussian[,,k])
         corr[k] <- cov[1,2,k] / sqrt(cov[1,1,k]*cov[2,2,k])
     }
     pk[1:K] ~ ddirch(onesRepNclust)

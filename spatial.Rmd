@@ -15,6 +15,7 @@ library(MCMCpack) # need for rwish
 library(ggmap)
 library(tidyr)
 library(ggforce)
+library(RColorBrewer)
 ```
 
 ## R Markdown
@@ -85,6 +86,90 @@ ggplot(coord_df, aes(x=Latitude, y=Longitude)) + geom_point(size = 1, alpha=0.6,
   geom_ellipse(aes(x0=40.594563, y0=-74.014595, a=a,b=b, angle = angle_x, color="black"))+
   geom_ellipse(aes(x0=40.709422, y0=-73.882909, a=a,b=b, angle = angle_x, color="red"))+
   theme(legend.position="none")
+
+```
+
+
+## varying covariance matrix
+```{r}
+xi <- as.vector(apply(coord, 2, median))
+rng_coord <- apply(coord, 2, range)
+R1 <- rng_coord[2,1]-rng_coord[1,1]
+R2 <- rng_coord[2,2]-rng_coord[1,2]
+kappa <- matrix(c(1/R1^2,0,0,1/R2^2),nrow=2)
+beta <- matrix(c(R1^2/10,0,0,R2^2/10),nrow=2)
+g <- 2
+alpha <- 6
+K<-2
+onesRepNclust <- rep(1,K)
+data = list(y=coord,N=N,xi=xi,kappa=kappa,alpha=alpha, beta=beta,K=K, onesRepNclust=onesRepNclust)
+#inits=function(){list( mu=mvrnorm(N,xi,matrix(c(10,0,0,10),nrow=2) ),
+                       #tau = rwish(6,matrix(c(.02,0,0,.04),nrow=2)))}
+```
+
+```{r}
+mu=mvrnorm(N,xi,matrix(c(10,0,0,10),nrow=2))
+```
+
+```{r}
+K<-2
+muOfGaussian.name <- sprintf("muOfGaussian[%s,%s]",rep(1:K,each=2),rep(1:2,times=K))
+cov.name <- sprintf("cov[%s,%s,%s]",rep(1:2,each=2),rep(1:2,times=2),rep(1:K,each=4))
+pk.name <- sprintf("pk[%s]",seq(1:K))
+corr.name <- sprintf("corr[%s]",seq(1:K))
+name <- c(muOfGaussian.name, cov.name, pk.name, corr.name)
+t1 = proc.time()
+multNorm.mcmc <- jags.model("spatial_varying_tau.bug",data=data,n.chains = 3, n.adapt=1000, quiet=FALSE)
+nthin = 5
+multNorm.coda = coda.samples(multNorm.mcmc,name,500*nthin, thin = nthin)
+t2 = proc.time()
+```
+
+
+```{r}
+t2-t1
+summary(multNorm.coda,digits=2)
+```
+```{r}
+mat.coda <-as.matrix(multNorm.coda)
+mean.coda <- apply(mat.coda, 2, mean)
+```
+
+
+
+
+```{r}
+a <- c()
+b <- c()
+angle_x <- c()
+mu_x <- c()
+mu_y <- c()
+for (k in 1:K){
+  mux.name.k <- sprintf("muOfGaussian[%s,%s]",k,1)
+  muy.name.k <- sprintf("muOfGaussian[%s,%s]",k,2)
+  mu_x <- append(mu_x, mean.coda[mux.name.k])
+  mu_y <- append(mu_y, mean.coda[muy.name.k])
+  cov.name.k <- sprintf("cov[%s,%s,%s]",rep(1:2,each=2),rep(1:2,times=2),k)
+  cov.k = matrix(mean.coda[cov.name.k], nrow = 2)
+  eig_cov.k <- eigen(cov.k)
+  a <- append(a, sqrt(eig_cov.k$values[1]))
+  b <- append(b, sqrt(eig_cov$values[2]))
+  angle_x <- append(angle_x, acos(eig_cov$vectors[1,1]))
+}
+
+
+cols <- brewer.pal(4,'Set2')
+
+p <- ggplot(coord_df, aes(x=Latitude, y=Longitude)) + geom_point(size = 1, alpha=0.6, colour = '#56B4E9')
+
+for (k in 1:K){
+  p <- p + geom_point(aes(x=mu_x[k], y=mu_y[k]), size = 2, alpha=1.0, colour = cols[k])
+  print(k)
+  p <- p + geom_ellipse(aes(x0=mu_x[k], y0=mu_y[k], a=a[k],b=b[k], angle = angle_x[k], color=cols[k]))
+}
+
+# p <- p + theme(legend.position="none")
+p
 
 ```
 
