@@ -23,7 +23,8 @@ library(RColorBrewer)
 load data
 
 ```{r}
-path = "E:/Desktop/2022 Spring/6780/Project/6780_project/data_with_coordinates.csv"
+#path = "E:/Desktop/2022 Spring/6780/Project/6780_project/data_with_coordinates.csv"
+path = "/Users/felicityj/Documents/GitHub/6780_project/data_with_coordinates.csv"
 data = data.frame(read.csv(path))
 data_with_ct <- data[!is.na(data['census_tract']),]
 dim(data); dim(data_with_ct)
@@ -32,7 +33,7 @@ dim(data); dim(data_with_ct)
 ## bivariate normal on real data
 
 ```{r}
-N <- 100
+N <- 10000
 coord_df <- subset(data_with_ct, select=c("Latitude", "Longitude"))
 coord_df <- as.data.frame(coord_df[1:N,])
 coord <- data.matrix(coord_df)
@@ -156,6 +157,7 @@ mean.coda <- apply(mat.coda, 2, mean)
 
 
 ```{r}
+post_stats <- as.data.frame(read.table("3_posterior.csv", row.names = 1, sep = ","))
 a <- c()
 b <- c()
 angle_x <- c()
@@ -187,6 +189,69 @@ for (k in 1:K){
 
 # p <- p + theme(legend.position="none")
 p
+
+
+for (k in 1:K){
+  p <- p + geom_point(aes_string(x=mu_x[k], y=mu_y[k]), size = 2, alpha=1.0, color = cols[k])
+  print(k)
+  #p <- p + geom_ellipse(aes(x0=mu_x[k], y0=mu_y[k], a=a[k],b=b[k], angle = angle_x[k], color=cols[k]))
+  loop_ellipse_input = 
+    paste("geom_ellipse(aes(x0=",mu_x[k], ", y0=",mu_y[k],", a=", a[k],",b=",b[k],", angle = ",angle_x[k], "))", sep="")
+  # p <- p + geom_ellipse(aes_string(x0="mu_x[k]", y0="mu_y[k]", a="a[k]",b="b[k]", angle = "angle_x[k]", color=cols[k]))
+  p <- p+eval(parse(text= loop_ellipse_input))
+  print(p)
+  #Sys.sleep(2)
+}
+
+```
+
+# Plot ellipse given posterior
+```{r}
+post_stats <- as.data.frame(read.table("3_posterior.csv", row.names = 1, sep = ","))
+K <- 3
+a <- c()
+b <- c()
+angle_x <- c()
+mu_x <- c()
+mu_y <- c()
+for (k in 1:K){
+  mux.name.k <- sprintf("muOfGaussian[%s,%s]",k,1)
+  muy.name.k <- sprintf("muOfGaussian[%s,%s]",k,2)
+  mu_x <- append(mu_x, post_stats[mux.name.k,])
+  mu_y <- append(mu_y, post_stats[muy.name.k,])
+  cov.name.k <- sprintf("cov[%s,%s,%s]",rep(1:2,each=2),rep(1:2,times=2),k)
+  cov.k = matrix(post_stats[cov.name.k,], nrow = 2)
+  eig_cov.k <- eigen(cov.k)
+  a <- append(a, sqrt(eig_cov.k$values[1]))
+  b <- append(b, sqrt(eig_cov.k$values[2]))
+  angle_x <- append(angle_x, acos(eig_cov.k$vectors[1,1]))
+}
+
+
+cols <- brewer.pal(4,'Set2')
+cols <- c("red", "blue", "black")
+p <- ggplot(coord_df, aes(x=Latitude, y=Longitude)) + geom_point(size = 1, alpha=0.6, colour = '#56B4E9')
+
+p <- p + geom_point(aes(x=mu_x[k], y=mu_y[k]), size = 2, alpha=1.0, colour = "black")
+p <- p + geom_ellipse(aes(x0=mu_x[k], y0=mu_y[k], a=a[k],b=b[k], angle = angle_x[k], color="black"))
+
+ggsave("3mixture.pdf")
+# p <- p + theme(legend.position="none")
+p
+
+
+for (k in 1:K){
+  p <- p + geom_point(aes_string(x=mu_x[k], y=mu_y[k]), size = 2, alpha=1.0, color = cols[k])
+  print(k)
+  #p <- p + geom_ellipse(aes(x0=mu_x[k], y0=mu_y[k], a=a[k],b=b[k], angle = angle_x[k], color=cols[k]))
+  loop_ellipse_input = 
+    paste("geom_ellipse(aes(x0=",mu_x[k], ", y0=",mu_y[k],", a=", a[k],",b=",b[k],", angle = ",angle_x[k], "))", sep="")
+  # p <- p + geom_ellipse(aes_string(x0="mu_x[k]", y0="mu_y[k]", a="a[k]",b="b[k]", angle = "angle_x[k]", color=cols[k]))
+  p <- p+eval(parse(text= loop_ellipse_input))
+  print(p)
+  #Sys.sleep(2)
+}
+ggsave("3mixture.pdf")
 
 ```
 
